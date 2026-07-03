@@ -42,8 +42,8 @@ fn worker(prefix_bytes: [u8; 4], suffix_bytes: [u8; 4], found: Arc<AtomicBool>) 
         hex::encode_to_slice(&uuid[10..12], &mut out[24..28]).unwrap();
 
         let mut hasher = Sha512::new();
-        // 修改点：对生成的 UUID 字符串明文进行哈希，而不是二进制 uuid 数组
-        hasher.update(&out);
+        // 修正点：对 16 字节原始二进制 uuid 数组进行哈希，与平台验证逻辑对齐
+        hasher.update(&uuid);
         let result = hasher.finalize();
 
         if check(&result) {
@@ -77,7 +77,7 @@ fn main() {
     let cores = num_cpus::get();
     println!("[] Target prefix: {}", prefix);
     println!("[] Target suffix: {}", suffix_hex);
-    println!("[] Required PoW : 33 bits leading zero in SHA512 of string");
+    println!("[] Required PoW : 33 bits leading zero in SHA512 of binary");
     println!("[] Using {} cores for mining...", cores);
 
     let found = Arc::new(AtomicBool::new(false));
