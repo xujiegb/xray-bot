@@ -67,3 +67,30 @@ jobs:
         with:
           name: ${{ matrix.output }}-${{ github.event.inputs.version }}
           path: ${{ matrix.output }}
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: ./downloads
+
+      - name: Organize Files
+        run: |
+          mkdir ./release_assets
+          find ./downloads -type f -exec cp {} ./release_assets/ \;
+          ls -R ./release_assets
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ github.event.inputs.version }}" ./release_assets/* \
+            --title "Release v${{ github.event.inputs.version }}" \
+            --notes "Automated native binaries built via GitHub Actions." \
+            --target ${{ github.sha }}
