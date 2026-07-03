@@ -1,0 +1,69 @@
+name: Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Enter compilation version number (e.g. 1.0.0)"
+        required: true
+        default: "1.0.0"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            binary: pow.exe
+            output: pow-windows-x64.exe
+          - os: windows-latest-arm64
+            platform: windows
+            binary: pow.exe
+            output: pow-windows-arm64.exe
+          - os: macos-13
+            platform: macos
+            binary: pow
+            output: pow-macos-x64
+          - os: macos-latest
+            platform: macos
+            binary: pow
+            output: pow-macos-arm64
+          - os: ubuntu-latest
+            platform: linux
+            binary: pow
+            output: pow-linux-x64
+          - os: ubuntu-latest-arm64
+            platform: linux
+            binary: pow
+            output: pow-linux-arm64
+          - os: ubuntu-24.04-riscv
+            platform: linux
+            binary: pow
+            output: pow-linux-riscv64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Binary
+        run: cargo build --release
+
+      - name: Package Unix
+        if: matrix.platform != 'windows'
+        run: mv target/release/${{ matrix.binary }} ./${{ matrix.output }}
+
+      - name: Package Windows
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: Move-Item target/release/${{ matrix.binary }} ./${{ matrix.output }}
+
+      - name: Upload Single File
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.output }}-${{ github.event.inputs.version }}
+          path: ${{ matrix.output }}
