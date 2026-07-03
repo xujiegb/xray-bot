@@ -5,7 +5,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 const COMMIT_HEX: &str = "90243a7416f52151a8c6cecf633500dceb366895";
-const FIXED_SUFFIX: [u8; 4] = [0x7e, 0xa4, 0x40, 0xbd];
 
 fn hex_to_bytes(hex: &str) -> Vec<u8> {
     (0..hex.len())
@@ -22,31 +21,29 @@ fn check(hash: &[u8]) -> bool {
         && (hash[4] & 0x80) == 0
 }
 
-fn worker(prefix_bytes: [u8; 4], found: Arc<AtomicBool>) {
+fn worker(prefix_bytes: [u8; 4], suffix_bytes: [u8; 4], found: Arc<AtomicBool>) {
     let mut rng = rand::thread_rng();
-
     let mut uuid = [0u8; 16];
     uuid[0..4].copy_from_slice(&prefix_bytes);
-    uuid[12..16].copy_from_slice(&FIXED_SUFFIX);
+    uuid[12..16].copy_from_slice(&suffix_bytes);
 
     let mut out = *b"00000000-0000-0000-0000-000000000000";
-
     hex::encode_to_slice(&uuid[0..4], &mut out[0..8]).unwrap();
     hex::encode_to_slice(&uuid[12..16], &mut out[28..36]).unwrap();
 
     while !found.load(Ordering::Relaxed) {
         rng.fill_bytes(&mut uuid[4..12]);
-
         uuid[6] = (uuid[6] & 0x0f) | 0x40;
         uuid[8] = (uuid[8] & 0x3f) | 0x80;
-        
+
         hex::encode_to_slice(&uuid[4..6], &mut out[9..13]).unwrap();
         hex::encode_to_slice(&uuid[6..8], &mut out[14..18]).unwrap();
         hex::encode_to_slice(&uuid[8..10], &mut out[19..23]).unwrap();
         hex::encode_to_slice(&uuid[10..12], &mut out[24..28]).unwrap();
 
         let mut hasher = Sha512::new();
-        hasher.update(&uuid);
+        // 修改点：对生成的 UUID 字符串明文进行哈希，而不是二进制 uuid 数组
+        hasher.update(&out);
         let result = hasher.finalize();
 
         if check(&result) {
@@ -60,19 +57,31 @@ fn worker(prefix_bytes: [u8; 4], found: Arc<AtomicBool>) {
 }
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() < 2 {
+        println!("Usage: {} <suffix_hex>", args[0]);
+        return;
+    }
+    let suffix_hex = &args[1];
+    if suffix_hex.len() != 8 {
+        println!("Error: Suffix must be exactly 8 hex characters.");
+        return;
+    }
+    let suffix_vec = hex_to_bytes(suffix_hex);
+    let suffix_bytes: [u8; 4] = suffix_vec.try_into().unwrap();
+
     let prefix = &COMMIT_HEX[COMMIT_HEX.len() - 8..];
     let prefix_vec = hex_to_bytes(prefix);
     let prefix_bytes: [u8; 4] = prefix_vec.try_into().unwrap();
 
     let cores = num_cpus::get();
-    println!("[*] Target prefix: {}", prefix);
-    println!("[*] Target suffix: 7ea440bd");
-    println!("[*] Required PoW : 33 bits leading zero in SHA512");
-    println!("[*] Using {} cores for mining...", cores);
+    println!("[] Target prefix: {}", prefix);
+    println!("[] Target suffix: {}", suffix_hex);
+    println!("[] Required PoW : 33 bits leading zero in SHA512 of string");
+    println!("[] Using {} cores for mining...", cores);
 
     let found = Arc::new(AtomicBool::new(false));
-
     (0..cores).into_par_iter().for_each(|_| {
-        worker(prefix_bytes, found.clone());
+        worker(prefix_bytes, suffix_bytes, found.clone());
     });
 }
