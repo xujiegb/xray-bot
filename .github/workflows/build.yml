@@ -42,6 +42,25 @@ jobs:
             platform: linux
             binary: pow
             output: pow-linux-riscv64
+          # 交叉编译架构配置
+          - os: ubuntu-26.04
+            platform: linux
+            binary: pow
+            output: pow-linux-s390x
+            target: s390x-unknown-linux-gnu
+            use-cross: true
+          - os: ubuntu-26.04
+            platform: linux
+            binary: pow
+            output: pow-linux-ppc64le
+            target: powerpc64le-unknown-linux-gnu
+            use-cross: true
+          - os: ubuntu-26.04
+            platform: linux
+            binary: pow
+            output: pow-linux-loong64
+            target: loongarch64-unknown-linux-gnu
+            use-cross: true
 
     runs-on: ${{ matrix.os }}
 
@@ -50,12 +69,33 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      # 仅在需要交叉编译的架构上安装 cross 工具
+      - name: Install Cross Tool
+        if: matrix.use-cross == true
+        run: |
+          dir=$(mktemp -d)
+          curl -sSLo- https://github.com/cross-rs/cross/releases/latest/download/cross-x86_64-unknown-linux-gnu.tar.gz | tar -xzf - -C "$dir"
+          echo "$dir" >> $GITHUB_PATH
+
+      # 原生编译步骤（保持不动）
       - name: Build Binary
+        if: matrix.use-cross != true
         run: cargo build --release
 
+      # 交叉编译步骤（按需内部调用 QEMU）
+      - name: Build Binary (Cross)
+        if: matrix.use-cross == true
+        run: cross build --target ${{ matrix.target }} --release
+
+      # 原生 Unix 架构打包
       - name: Package Unix
-        if: matrix.platform != 'windows'
+        if: matrix.platform != 'windows' && matrix.use-cross != true
         run: mv target/release/${{ matrix.binary }} ./${{ matrix.output }}
+
+      # 交叉编译 Unix 架构打包（路径包含 target 三元组）
+      - name: Package Unix (Cross)
+        if: matrix.platform != 'windows' && matrix.use-cross == true
+        run: mv target/${{ matrix.target }}/release/${{ matrix.binary }} ./${{ matrix.output }}
 
       - name: Package Windows
         if: matrix.platform == 'windows'
