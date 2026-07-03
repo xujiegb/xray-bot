@@ -75,6 +75,8 @@ jobs:
       contents: write
     
     steps:
+      - uses: actions/checkout@v7
+
       - name: Download All Artifacts
         uses: actions/download-artifact@v7
         with:
