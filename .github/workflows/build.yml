@@ -46,7 +46,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -63,7 +63,7 @@ jobs:
         run: Move-Item target/release/${{ matrix.binary }} ./${{ matrix.output }}
 
       - name: Upload Single File
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.output }}-${{ github.event.inputs.version }}
           path: ${{ matrix.output }}
