@@ -28,33 +28,37 @@ fn worker(prefix_bytes: [u8; 4], suffix_bytes: [u8; 4], found: Arc<AtomicBool>) 
     uuid[0..4].copy_from_slice(&prefix_bytes);
     uuid[12..16].copy_from_slice(&suffix_bytes);
 
-    let mut nonce = rng.next_u64();
-
     while !found.load(Ordering::Relaxed) {
-        nonce = nonce.wrapping_add(1);
-        
-        uuid[4..12].copy_from_slice(&nonce.to_be_bytes());
-        uuid[6] = (uuid[6] & 0x0f) | 0x40;
-        uuid[8] = (uuid[8] & 0x3f) | 0x80;
+        let rand_nonce = rng.next_u64();
+        uuid[4..12].copy_from_slice(&rand_nonce.to_be_bytes());
+        uuid[6] = (uuid[6] & 0x0f) | 0x40; 
+        uuid[8] = (uuid[8] & 0x3f) | 0x80; 
 
-        let mut hasher = Sha512::new();
-        hasher.update(&uuid);
-        let result = hasher.finalize();
+        for b10 in 0..=255 {
+            uuid[10] = b10;
+            for b11 in 0..=255 {
+                uuid[11] = b11;
 
-        if check(&result) {
-            if !found.swap(true, Ordering::Relaxed) {
-                let mut out = *b"00000000-0000-0000-0000-000000000000";
-                hex::encode_to_slice(&uuid[0..4], &mut out[0..8]).unwrap();
-                hex::encode_to_slice(&uuid[4..6], &mut out[9..13]).unwrap();
-                hex::encode_to_slice(&uuid[6..8], &mut out[14..18]).unwrap();
-                hex::encode_to_slice(&uuid[8..10], &mut out[19..23]).unwrap();
-                hex::encode_to_slice(&uuid[10..12], &mut out[24..28]).unwrap();
-                hex::encode_to_slice(&uuid[12..16], &mut out[28..36]).unwrap();
+                let mut hasher = Sha512::new();
+                hasher.update(&uuid);
+                let result = hasher.finalize();
 
-                let answer = std::str::from_utf8(&out).unwrap();
-                println!("/answer {}", answer);
+                if check(&result) {
+                    if !found.swap(true, Ordering::Relaxed) {
+                        let mut out = *b"00000000-0000-0000-0000-000000000000";
+                        hex::encode_to_slice(&uuid[0..4], &mut out[0..8]).unwrap();
+                        hex::encode_to_slice(&uuid[4..6], &mut out[9..13]).unwrap();
+                        hex::encode_to_slice(&uuid[6..8], &mut out[14..18]).unwrap();
+                        hex::encode_to_slice(&uuid[8..10], &mut out[19..23]).unwrap();
+                        hex::encode_to_slice(&uuid[10..12], &mut out[24..28]).unwrap();
+                        hex::encode_to_slice(&uuid[12..16], &mut out[28..36]).unwrap();
+
+                        let answer = std::str::from_utf8(&out).unwrap();
+                        println!("/answer {}", answer);
+                    }
+                    return;
+                }
             }
-            break;
         }
     }
 }
