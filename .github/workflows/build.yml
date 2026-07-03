@@ -42,16 +42,26 @@ jobs:
             platform: linux
             binary: pow
             output: pow-linux-riscv64
-          - os: ubuntu-latest
-            platform: linux-cross
-            target: s390x-unknown-linux-gnu
+          # 使用 cross 容器交叉编译的架构
+          - os: ubuntu-26.04
+            platform: linux
             binary: pow
             output: pow-linux-s390x
-          - os: ubuntu-latest
-            platform: linux-cross
-            target: powerpc64le-unknown-linux-gnu
+            target: s390x-unknown-linux-gnu
+            use-cross: true
+          - os: ubuntu-26.04
+            platform: linux
             binary: pow
             output: pow-linux-ppc64le
+            target: powerpc64le-unknown-linux-gnu
+            use-cross: true
+          # 使用宿主机交叉链编译的架构（解决 cross 无 loongarch64 镜像的问题）
+          - os: ubuntu-26.04
+            platform: linux
+            binary: pow
+            output: pow-linux-loong64
+            target: loongarch64-unknown-linux-gnu
+            use-loongarch-cross: true
 
     runs-on: ${{ matrix.os }}
 
@@ -60,30 +70,47 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      # 统一安装目标工具链，如果是 cross 架构则安装对应的 target
-      - name: Install rust target
-        if: matrix.target != ''
-        run: rustup target add ${{ matrix.target }}
+      # 仅针对 loongarch64 安装对应的 Rust target 和 Ubuntu 交叉编译器
+      - name: Install LoongArch64 Toolchain
+        if: matrix.use-loongarch-cross == true
+        run: |
+          rustup target add ${{ matrix.target }}
+          sudo apt-get update
+          sudo apt-get install -y gcc-loongarch64-linux-gnu
 
-      # 针对交叉编译架构安装 cross 工具
-      - name: Install cross
-        if: matrix.platform == 'linux-cross'
-        run: cargo install cross
+      # 仅在 s390x 和 ppc64le 架构上安装 cross 工具
+      - name: Install Cross Tool
+        if: matrix.use-cross == true
+        run: |
+          dir=$(mktemp -d)
+          curl -sSLo- https://github.com/cross-rs/cross/releases/latest/download/cross-x86_64-unknown-linux-gnu.tar.gz | tar -xzf - -C "$dir"
+          echo "$dir" >> $GITHUB_PATH
 
-      - name: Build Binary (Native)
-        if: matrix.platform != 'linux-cross'
+      # 1. 原生编译步骤（保持不动）
+      - name: Build Binary
+        if: matrix.use-cross != true && matrix.use-loongarch-cross != true
         run: cargo build --release
 
+      # 2. 容器交叉编译步骤（用于 s390x / ppc64le）
       - name: Build Binary (Cross)
-        if: matrix.platform == 'linux-cross'
+        if: matrix.use-cross == true
         run: cross build --target ${{ matrix.target }} --release
 
+      # 3. 宿主机交叉编译步骤（用于 loongarch64，并指定连接器）
+      - name: Build Binary (LoongArch Cross)
+        if: matrix.use-loongarch-cross == true
+        env:
+          CARGO_TARGET_LOONGARCH64_UNKNOWN_LINUX_GNU_LINKER: loongarch64-linux-gnu-gcc
+        run: cargo build --target ${{ matrix.target }} --release
+
+      # 原生 Unix 架构打包（路径为 target/release）
       - name: Package Unix
-        if: matrix.platform == 'linux'
+        if: matrix.platform != 'windows' && matrix.use-cross != true && matrix.use-loongarch-cross != true
         run: mv target/release/${{ matrix.binary }} ./${{ matrix.output }}
 
-      - name: Package Cross
-        if: matrix.platform == 'linux-cross'
+      # 交叉编译 Unix 架构打包（路径均包含 target/${{ matrix.target }}/release）
+      - name: Package Unix (Cross & Host-Cross)
+        if: matrix.platform != 'windows' && (matrix.use-cross == true || matrix.use-loongarch-cross == true)
         run: mv target/${{ matrix.target }}/release/${{ matrix.binary }} ./${{ matrix.output }}
 
       - name: Package Windows
