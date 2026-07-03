@@ -26,17 +26,15 @@ fn worker(prefix_bytes: [u8; 4], suffix_bytes: [u8; 4], found: Arc<AtomicBool>) 
 
     let mut uuid = [0u8; 16];
     uuid[0..4].copy_from_slice(&prefix_bytes);
-    uuid[4..8].copy_from_slice(&[0x00, 0x00, 0x40, 0x00]);
     uuid[12..16].copy_from_slice(&suffix_bytes);
 
-    let mut nonce_bytes = [0u8; 4];
-    rng.fill_bytes(&mut nonce_bytes);
-    let mut nonce = u32::from_le_bytes(nonce_bytes);
+    let mut nonce = rng.next_u64();
 
     while !found.load(Ordering::Relaxed) {
         nonce = nonce.wrapping_add(1);
-        let current_bytes = nonce.to_le_bytes();
-        uuid[8..12].copy_from_slice(&current_bytes);
+        
+        uuid[4..12].copy_from_slice(&nonce.to_be_bytes());
+        uuid[6] = (uuid[6] & 0x0f) | 0x40;
         uuid[8] = (uuid[8] & 0x3f) | 0x80;
 
         let mut hasher = Sha512::new();
