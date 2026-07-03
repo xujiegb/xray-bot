@@ -1,4 +1,4 @@
-name: Build
+name: Native Build
 
 on:
   workflow_dispatch:
@@ -14,27 +14,27 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
+          - os: windows-2025
             platform: windows
             binary: pow.exe
             output: pow-windows-x64.exe
-          - os: windows-latest-arm64
+          - os: windows-11-arm64
             platform: windows
             binary: pow.exe
             output: pow-windows-arm64.exe
-          - os: macos-13
+          - os: macos-15-intel
             platform: macos
             binary: pow
             output: pow-macos-x64
-          - os: macos-latest
+          - os: macos-15
             platform: macos
             binary: pow
             output: pow-macos-arm64
-          - os: ubuntu-latest
+          - os: ubuntu-26.04
             platform: linux
             binary: pow
             output: pow-linux-x64
-          - os: ubuntu-latest-arm64
+          - os: ubuntu-26.04-arm64
             platform: linux
             binary: pow
             output: pow-linux-arm64
